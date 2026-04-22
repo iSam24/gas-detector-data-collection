@@ -65,8 +65,8 @@ def getRatio(V_out, RL):
     return RL * (VREF - V_out) / V_out
 
 def getPPM(ch, raw):
-    if raw >= 1020:
-        return None
+    if raw >= 1023:
+        raw = 1023
 
     volts = to_voltage(raw)
 
@@ -76,7 +76,10 @@ def getPPM(ch, raw):
 
     elif ch == 1:
         rs = getRatio(volts, MQ7_RL)
-        return MQ7_coefficient_A * ((rs / R0_MQ7) ** MQ7_coefficient_B)
+        ratio = rs / R0_MQ7
+        # prevent zero or negative ratio
+        ratio = max(ratio, 1e-5)
+        return MQ7_coefficient_A * ((ratio) ** MQ7_coefficient_B)
 
     elif ch == 2:
         rs = getRatio(volts, MQ135_RL)

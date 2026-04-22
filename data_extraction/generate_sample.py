@@ -3,7 +3,7 @@ import uuid
 import os
 import numpy as np
 
-from gas_sensors import getGasData
+from MQgas_sensors import getGasData
 from MLX90640_sensor import getIrData
 
 SAMPLE_DURATION_SEC = 5
@@ -12,15 +12,16 @@ SAMPLE_DURATION_SEC = 5
 # only works when EXPECTED_FPS = 4 and #define FPS 16 in mlx90640-python.cpp
 EXPECTED_FPS = 4
 TARGET_SAMPLES = SAMPLE_DURATION_SEC * EXPECTED_FPS
+TARGET_SAMPLES_IR = TARGET_SAMPLES + 1 # Get 1 more sample as the first sample is dropped as it contains 0's
 
 DATASET_DIR = "dataset"
-LABEL = "normal"   # <-- change per class
+LABEL = "test"   # <-- change per class
 
 ir_result = {}
 gas_result = {}
 
 def capture_ir():
-    ir_avg, ir_frames = getIrData(TARGET_SAMPLES)
+    ir_avg, ir_frames = getIrData(TARGET_SAMPLES_IR)
     ir_result["avg"] = ir_avg
     ir_result["frames"] = ir_frames
 
