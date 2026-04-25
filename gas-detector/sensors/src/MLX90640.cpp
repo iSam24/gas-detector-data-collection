@@ -7,6 +7,8 @@
 #include "MLX90640.h"
 #include "MLX90640/MLX90640_I2C_Driver.h"
 
+#define DEBUG 1
+
 // Static member definitions
 uint16_t MLX90640::eeMLX90640[832];
 float MLX90640::mlx90640To[768];
@@ -109,57 +111,22 @@ void MLX90640::captureIntoBuffer(int numFrames, std::vector<float>& buffer)
     buffer.clear();
     buffer.reserve(numFrames * 768);
 
-    // Frame period based on sensor FPS + timing offset
-    auto frameDuration = std::chrono::microseconds(FRAME_TIME_MICROS + OFFSET_MICROS);
-    // const int frameTimeMicros = (1000000 / fps) + OFFSET_MICROS;
-    // auto frameDuration = std::chrono::microseconds(frameTimeMicros);
-
-    auto next_tick = std::chrono::steady_clock::now();
-
+    auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < numFrames; ++i) {
-        next_tick += frameDuration;
-
+        // GetFrameData blocks until the sensor delivers the next subpage
+        // At 4Hz chess mode this naturally takes ~250ms per call
+        // No sleep needed, the sensor is the timer
         MLX90640_GetFrameData(MLX_I2C_ADDR, frame);
         MLX90640_InterpolateOutliers(frame, eeMLX90640);
-
         eTa = MLX90640_GetTa(frame, &mlx90640);
         MLX90640_CalculateTo(frame, &mlx90640, emissivity, eTa, mlx90640To);
 
         buffer.insert(buffer.end(), mlx90640To, mlx90640To + 768);
-
-        // Overrun warning
-        auto now = std::chrono::steady_clock::now();
-        if (now > next_tick) {
-            std::cerr << "[MLX90640] Frame " << i << " overran deadline\n";
-        }
-
-        std::this_thread::sleep_until(next_tick);
     }
+#ifdef DEBUG
+    auto total = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    std::cout << "[MLX90640] Captured " << numFrames << " frames in "
+        << total << "s  (" << numFrames / total << " fps actual)\n";
+#endif
+
 }
-
-// std::vector<float> capture_frames(int num_frames)
-// {
-//     std::vector<float> buffer;
-//     buffer.reserve(num_frames * 768);
-
-//     auto frame_time = std::chrono::microseconds(FRAME_TIME_MICROS + OFFSET_MICROS);
-
-//     for(int i = 0; i < num_frames; i++)
-//     {
-//         auto start = std::chrono::system_clock::now();
-//         MLX90640_GetFrameData(MLX_I2C_ADDR, frame);
-// 		MLX90640_InterpolateOutliers(frame, eeMLX90640);
-
-// 		eTa = MLX90640_GetTa(frame, &mlx90640);
-// 		MLX90640_CalculateTo(frame, &mlx90640, emissivity, eTa, mlx90640To);
-
-// 		buffer.insert(buffer.end(), mlx90640To, mlx90640To + 768);
-
-//         // maintain sync timing
-//         auto end = std::chrono::system_clock::now();
-//         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-//         std::this_thread::sleep_for(frame_time - elapsed);
-//     }
-
-//     return buffer;
-// }

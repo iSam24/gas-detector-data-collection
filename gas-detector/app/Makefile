@@ -1,6 +1,6 @@
 # Compiler
 CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -pthread
+CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -pthread -I/usr/local/include
 
 # Directories
 APP_SRC_DIR      := src
@@ -30,7 +30,7 @@ INCLUDES := -I$(APP_INC_DIR) \
             -I$(MLX_LIB_INC)
 
 # Libraries (SPI + math + pthread)
-LDFLAGS := -lpthread
+LDFLAGS := -L/usr/local/lib -ltensorflow-lite -ldl -lpthread
 
 # Default target
 all: $(BUILD_DIR) $(TARGET)

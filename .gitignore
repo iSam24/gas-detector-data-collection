@@ -2,3 +2,6 @@
 __pycache__
 **/build/
 *.o
+/tflite_build
+tensorflow/
+kleidiai-source/
