@@ -89,8 +89,7 @@ void inferenceThread(InferenceEngine& engine, WindowQueue& queue) {
         for (int i = 0; i < 4; ++i) {
             int bar = static_cast<int>(result.probabilities[i] * 20);
             std::cout << "│ " << labels[i] << "\t"
-                      << result.probabilities[i] * 100.0f << "%  "
-                      << std::string(bar, '#') << "\n";
+                      << result.probabilities[i] * 100.0f << "%  " << "\n";
         }
         std::cout << "└─────────────────────────────┘\n";
     }
