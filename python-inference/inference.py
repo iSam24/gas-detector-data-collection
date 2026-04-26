@@ -1,21 +1,25 @@
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 import threading
 import numpy as np
 from ai_edge_litert.interpreter import Interpreter
 
 from data_extraction.MQgas_sensors import getGasData
 from data_extraction.MLX90640_sensor import getIrData
-from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 _HERE           = Path(__file__).parent.resolve()
-MODEL_PATH      = str(_HERE / "model_float16.tflite")
+MODEL_PATH      = str(_HERE / "model_float32v2.tflite")
 NORM_STATS_PATH = str(_HERE / "norm_stats.npz")
 EXPECTED_FPS    = 4
 SAMPLE_DURATION = 5                        # seconds per window
 TARGET_SAMPLES  = SAMPLE_DURATION * EXPECTED_FPS          # 20
 TARGET_SAMPLES_IR = TARGET_SAMPLES + 1     # +1 because getIrData drops first frame
 PROBABILITY_LIMIT = 0.60
-CLASSES     = ["aerosol", "breath", "flame", "normal"]
+CLASSES     = ["aerosol", "flame", "normal"]
 
 # ── Load model ────────────────────────────────────────────────────────────────
 print("Loading TFLite model...")
@@ -26,7 +30,7 @@ output_details = interpreter.get_output_details()
 print(f"Inputs : {[d['name'] for d in input_details]}")
 print(f"Output shape: {output_details[0]['shape']}")
 
-# ── Load normalisation stats ──────────────────────────────────────────────────
+# Load normalisation stats 
 print("Loading normalisation stats...")
 stats    = np.load(NORM_STATS_PATH)
 ir_mean  = stats["ir_mean"].astype(np.float32)   # (1, 1, 32, 24)
@@ -34,7 +38,11 @@ ir_std   = stats["ir_std"].astype(np.float32)    # (1, 1, 32, 24)
 gas_mean = stats["gas_mean"].astype(np.float32)  # (1, 1, 3)
 gas_std  = stats["gas_std"].astype(np.float32)   # (1, 1, 3)
 
-# ── Normalisation ─────────────────────────────────────────────────────────────
+def make_ir_relative(ir_frames):
+    # ir_frames: (20, 32, 24)
+    return ir_frames - ir_frames.mean(axis=(1, 2), keepdims=True)
+
+# Normalisation
 def normalize(ir_frames, gas):
     """
     ir_frames : (20, 32, 24)
@@ -44,7 +52,7 @@ def normalize(ir_frames, gas):
     gas_norm = (gas - gas_mean) / gas_std
     return ir_norm.astype(np.float32), gas_norm.astype(np.float32)
 
-# ── Inference ─────────────────────────────────────────────────────────────────
+# Inference
 def run_inference(ir_frames, gas):
     """
     ir_frames : (20, 32, 24) — already normalised
@@ -62,7 +70,7 @@ def run_inference(ir_frames, gas):
     pred_idx  = int(np.argmax(probs))
     return CLASSES[pred_idx], pred_idx, probs
 
-# ── Capture window ────────────────────────────────────────────────────────────
+# Capture window
 ir_result  = {}
 gas_result = {}
 
@@ -77,7 +85,7 @@ def capture_gas():
     data = getGasData(SAMPLE_DURATION, EXPECTED_FPS)
     gas_result["data"] = data.astype(np.float32)       # (20, 3)
 
-# ── Main loop ─────────────────────────────────────────────────────────────────
+# Main loop
 def main():
     print("\nStarting inference loop — Ctrl+C to stop\n")
     window_count = 0
@@ -105,8 +113,11 @@ def main():
             print(f"  WARNING: unexpected gas shape {gas_data.shape}, skipping")
             continue
 
+        # Calculate relative IR
+        ir_rel = make_ir_relative(ir_frames)     # (20, 32, 24)
+        
         # Normalise
-        ir_norm, gas_norm = normalize(ir_frames, gas_data)
+        ir_norm, gas_norm = normalize(ir_rel, gas_data)
 
         # Infer
         print(f"IR shape before inference:  {ir_norm.shape}")

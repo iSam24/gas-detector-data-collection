@@ -6,6 +6,8 @@
 #include <csignal>
 #include <atomic>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 #include "MLX90640.h"
 #include "MQSensor.h"
@@ -18,9 +20,11 @@ static constexpr int   SAMPLE_DURATION_SEC = 5;
 static constexpr int   EXPECTED_FPS        = 4;
 static constexpr int   TARGET_SAMPLES      = SAMPLE_DURATION_SEC * EXPECTED_FPS;  // 20
 static constexpr int   TARGET_SAMPLES_IR   = TARGET_SAMPLES + 1;                  // 21 — first dropped
-static constexpr const char* MODEL_PATH    =   "/home/isam/dev/MLX90640/python-inference/model_float32.tflite";
+static constexpr const char* MODEL_PATH    =   "/home/isam/dev/MLX90640/python-inference/model_float32v2.tflite";
 static constexpr int    NUM_QUEUE_WINDOWS  = 2;
+static bool             DEBUG              = false;
 
+static std::atomic<int> capture_count{0};
 static std::atomic<bool> running{true};
 
 void signalHandler(int sig) {
@@ -28,9 +32,63 @@ void signalHandler(int sig) {
     running = false;
 }
 
+// Write IR frames (20, 32, 24) as (20, 768) flat CSV — matches debug_ir_frames.csv
+void writeIrCsv(const std::string& path,
+                const std::vector<std::vector<std::vector<float>>>& frames)
+{
+    std::ofstream f(path);
+    if (!f) throw std::runtime_error("Cannot open " + path);
+
+    f << std::fixed;
+    f.precision(2);
+
+    for (const auto& frame : frames) {           // 20 frames
+        bool firstVal = true;
+        for (const auto& row : frame) {          // 32 rows
+            for (float v : row) {                // 24 cols
+                if (!firstVal) f << ",";
+                f << v;
+                firstVal = false;
+            }
+        }
+        f << "\n";
+    }
+
+    std::cout << "Saved IR CSV  → " << path
+              << "  (" << frames.size() << " x 768)\n";
+}
+
+// Write gas data (20, 3) CSV — matches debug_gas.csv
+void writeGasCsv(const std::string& path,
+                 const std::vector<std::vector<float>>& gas)
+{
+    std::ofstream f(path);
+    if (!f) throw std::runtime_error("Cannot open " + path);
+
+    f << std::fixed;
+    f.precision(2);
+
+    for (const auto& sample : gas) {            // 20 samples
+        for (size_t i = 0; i < sample.size(); ++i) {
+            if (i > 0) f << ",";
+            f << sample[i];
+        }
+        f << "\n";
+    }
+
+    std::cout << "Saved gas CSV → " << path
+              << "  (" << gas.size() << " x " << (gas.empty() ? 0 : gas[0].size()) << ")\n";
+}
+
 void captureThread(MLX90640& ir, MQSensor& gas, WindowQueue& queue) {
+
+    if (DEBUG) {
+        std::filesystem::create_directories("debug_csv");
+    }
+
     while (running)
     {
+        capture_count++;
         CaptureWindow window;
 
         std::exception_ptr irError, gasError;
@@ -66,6 +124,18 @@ void captureThread(MLX90640& ir, MQSensor& gas, WindowQueue& queue) {
             continue; 
         }
 
+        if (DEBUG) {
+            try {
+                std::string irCsvPath = "debug_csv/debug_ir_cpp" + std::to_string(capture_count) + ".csv";
+                std::string gasCsvPath = "debug_csv/debug_gas_cpp" + std::to_string(capture_count) + ".csv";
+                writeIrCsv(irCsvPath,  window.irFrames);
+                writeGasCsv(gasCsvPath, window.gas);
+            } catch (const std::exception& e) {
+                std::cerr << "[ERROR] Failed to write CSV: " << e.what() << "\n";
+                continue;
+            } 
+        }
+
         queue.push(std::move(window));
     }
     queue.stop();   // !running
@@ -85,9 +155,8 @@ void inferenceThread(InferenceEngine& engine, WindowQueue& queue) {
         std::cout << "│ Prediction: "
                   << result.label << " (" << result.confidence * 100.0f << "%)\n";
         std::cout << "├─────────────────────────────┤\n";
-        const char* labels[] = {"normal", "aerosol", "flame", "breath"};
-        for (int i = 0; i < 4; ++i) {
-            int bar = static_cast<int>(result.probabilities[i] * 20);
+        const char* labels[] = {"aerosol", "flame", "normal"};
+        for (int i = 0; i < 3; ++i) {
             std::cout << "│ " << labels[i] << "\t"
                       << result.probabilities[i] * 100.0f << "%  " << "\n";
         }

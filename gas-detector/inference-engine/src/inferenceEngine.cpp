@@ -7,10 +7,16 @@
 #include <algorithm>
 #include <stdexcept>
 
+static constexpr bool DEBUG{1};
+
 
 InferenceEngine::InferenceEngine(const std::string& modelPath) 
 {
     loadModel(modelPath);
+
+    if (DEBUG) {
+        printNormStats();
+    }
 }
 
 void InferenceEngine::loadModel(const std::string& modelPath) 
@@ -44,22 +50,36 @@ void InferenceEngine::loadModel(const std::string& modelPath)
     std::cout << "[InferenceEngine] Loaded : " << modelPath << "\n";
 }
 
-void InferenceEngine::normalise(const std::vector<std::vector<std::vector<float>>>& irFrames,
-               const std::vector<std::vector<float>>& gas,
-               std::vector<float>& irNorm,  std::vector<float>& gasNorm) 
+// Normalises IR and gas data
+// IR data:
+// 1. Calculates per frame IR mean
+// 2. Subtract IR val from mean
+// 3. Normalise
+// Gas
+// 1. Normalised
+void InferenceEngine::normalise(
+    const std::vector<std::vector<std::vector<float>>>& irFrames,
+    const std::vector<std::vector<float>>& gas,
+    std::vector<float>& irNorm,  std::vector<float>& gasNorm) 
 {
     // resize irNorm
     irNorm.resize(TIMESTEPS * IR_H * IR_W);
 
     // loop through each ir point (timesteps, height, width)
     for (int t = 0; t < TIMESTEPS; ++t) {
+
+        // 1. Calculate frame mean
+        float frameMean = calcFrameMean(irFrames, t);
+
+        // 2. Subtract mean then z-score normalise
         for (int h = 0; h < IR_H; ++h) {
             for (int w = 0; w < IR_W; ++w) {
                 // apply normalization
                 // ir_norm  = (ir_frames - ir_mean) / ir_std
                 int flatIdx = t * IR_H * IR_W + h * IR_W + w;
                 int statIndex = h * IR_W + w;
-                irNorm[flatIdx] = (irFrames[t][h][w] - IR_MEAN[statIndex]) / IR_STD[statIndex];
+                float relative = irFrames[t][h][w] - frameMean;
+                irNorm[flatIdx] = (relative - IR_MEAN[statIndex]) / IR_STD[statIndex];
             }
         }
     }
@@ -81,9 +101,16 @@ InferenceResult InferenceEngine::run(
     const std::vector<std::vector<std::vector<float>>>& irFrames,
     const std::vector<std::vector<float>>& gas) 
 {
+    if(DEBUG)   std::cout << "In InferenceEngine::run\n";
+    
     // Normalise 
     std::vector<float>  irNorm, gasNorm;
     normalise(irFrames, gas, irNorm, gasNorm);
+
+    if(DEBUG) {
+        std::cerr << "[run] normalise done. irNorm=" << irNorm.size() 
+            << " gasNorm=" << gasNorm.size() << "\n";
+    }
     
     // copy irNorm and gasNorm to input tensor
     for (int idx : interpreter_->inputs()) {
@@ -96,7 +123,7 @@ InferenceResult InferenceEngine::run(
         else if (name.find("gas") != std::string::npos) {
             std::copy(gasNorm.begin(), gasNorm.end(), dest);
         } else {
-            std::cerr << "[InferenceEngine] Unknown input: " << name << "\n";
+            std::cerr << "[InferenceEngine::run] Unknown input: " << name << "\n";
         }
     }
 
@@ -118,4 +145,31 @@ InferenceResult InferenceEngine::run(
     result.confidence = result.probabilities[result.classIdx];
 
     return result;
+}
+
+void InferenceEngine::printNormStats() {
+    std::cout << "[NormStats] IR mean range: "
+              << *std::min_element(IR_MEAN.begin(), IR_MEAN.end()) << " to "
+              << *std::max_element(IR_MEAN.begin(), IR_MEAN.end()) << "\n";
+    std::cout << "[NormStats] IR std range: "
+              << *std::min_element(IR_STD.begin(), IR_STD.end()) << " to "
+              << *std::max_element(IR_STD.begin(), IR_STD.end()) << "\n";
+    std::cout << "[NormStats] Gas mean: ";
+    for (float v : GAS_MEAN) std::cout << v << " ";
+    std::cout << "\n[NormStats] Gas std: ";
+    for (float v : GAS_STD)  std::cout << v << " ";
+    std::cout << "\n";
+}
+
+float InferenceEngine::calcFrameMean(
+    const std::vector<std::vector<std::vector<float>>>& irFrames, 
+    int frameIdx)
+{
+    float frameMean = 0.0f;
+    for (int h = 0; h < IR_H; ++h) {
+        for (int w = 0; w < IR_W; ++w) {
+            frameMean += irFrames[frameIdx][h][w];
+        }
+    }
+    return frameMean /= static_cast<float>(IR_H * IR_W);
 }

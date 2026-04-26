@@ -22,7 +22,7 @@ struct InferenceResult {
     std::string          label;
     int                  classIdx;
     float                confidence;
-    std::array<float, 4> probabilities;
+    std::array<float, 3> probabilities;
 };
 
 class InferenceEngine {
@@ -45,6 +45,12 @@ private:
         std::vector<float>& irNorm,    // output: flat (20*32*24)
         std::vector<float>& gasNorm    // output: flat (20*3)
     );
+    float calcFrameMean(
+        const std::vector<std::vector<std::vector<float>>>& irFrames, 
+        int frameNum
+    );
+
+    void printNormStats();
 
     // TFLite
     std::unique_ptr<tflite::FlatBufferModel> model_;
@@ -54,10 +60,15 @@ private:
     static constexpr int   IR_H        = 32;
     static constexpr int   IR_W        = 24;
     static constexpr int   GAS_CH      = 3;
-    static constexpr int   NUM_CLASSES = 4;
+    static constexpr int   NUM_CLASSES = 3;
 
-    static constexpr const char* CLASSES[4] = {
-        "normal", "aerosol", "flame", "breath"
+    // static constexpr const char* CLASSES[4] = {
+    //     "normal", "aerosol", "flame", "breath"
+    // };
+
+    // matches python inference
+    static constexpr const char* CLASSES[3] = {
+        "aerosol", "flame", "normal"
     };
 };
 
