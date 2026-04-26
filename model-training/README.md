@@ -28,7 +28,7 @@ A multimodal deep learning classifier that fuses thermal infrared (IR) and gas s
 
 **Capture settings:** 5 seconds at 4 Hz → 20 samples per window. IR and gas are captured in parallel threads.
 
-## Model Architecture
+## Model Architecture (Sensor Fusion)
 
 ```mermaid
 graph TD

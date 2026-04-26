@@ -1,6 +1,6 @@
 # MLX90640 Multi-Sensor Gas Detection System
 
-A comprehensive system for detecting and classifying gas emissions using thermal imaging and gas sensors. This project combines IR thermal data from the MLX90640 sensor with gas concentration measurements to train a machine learning model capable of distinguishing between normal air, aerosol, flame, and breath conditions.
+Sensor fusion system for detecting and classifying gas emissions using thermal imaging and gas sensors. This project combines IR thermal data from the MLX90640 sensor with gas concentration measurements to train a machine learning model capable of distinguishing between normal air, aerosol, flame, and breath conditions.
 
 ## Project Overview
 
@@ -133,7 +133,7 @@ python check_npz_file.py dataset/normal/sample_001.npz
 
 ---
 
-## Model Architecure
+## Model Architecure (Sensor Fusion)
 
 Model trained using model-training/gas_detector_model.ipynb
 
@@ -211,36 +211,6 @@ Output example:
 │ breath       0.3%           |
 └─────────────────────────────┘
 ```
-
-### Key Application Components
-
-#### 1. Capture Thread
-- Reads IR frames from MLX90640 (4 FPS)
-- Reads gas sensor values from MCP3008
-- Buffers synchronised data in WindowQueue
-- Configuration: 5-second windows (20 frames + 20 gas readings)
-
-#### 2. Inference Thread
-- Retrieves data windows from queue
-- Runs TFLite model inference
-- Outputs predictions and confidence scores
-- Handles 4 classes: normal, aerosol, flame, breath
-
-#### 3. Window Queue
-- Thread-safe producer-consumer pattern
-- Capacity: 2 windows
-- Condition variables for synchronisation
-- Prevents data loss during processing
-
-### Dependencies
-
-- **TensorFlow Lite** - Inference framework
-- **Abseil-cpp** - Dependency of TFLite
-- **Ruy** - Matrix operations library
-- **XNNPACK** - CPU acceleration delegate
-- **pthreadpool** - Thread pool implementation
-
----
 
 ## Installation & Setup
 
@@ -334,7 +304,7 @@ make
 - **Inference Latency**: < 200ms per window (on RPi5)
 - **Throughput**: ~5 predictions per second
 - **Memory Usage**: 
-- **Model Size**:
+- **Model Size**: ~128 KB (float32)
 
 ## Troubleshooting
 
