@@ -2,6 +2,10 @@
 
 Sensor fusion system for detecting and classifying gas emissions using thermal imaging and gas sensors. This project combines IR thermal data from the MLX90640 sensor with gas concentration measurements to train a machine learning model capable of distinguishing between normal air, aerosol, flame, and breath conditions.
 
+![Gas detector demo](media/gas-detector.PNG)
+
+[Watch demo video](images/demo.mp4)
+
 ## Project Overview
 
 This project is divided into three main components:
