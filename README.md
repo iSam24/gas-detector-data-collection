@@ -4,7 +4,7 @@ Sensor fusion system for detecting and classifying gas emissions using thermal i
 
 ![Gas detector demo](media/gas-detector.PNG)
 
-[Watch demo video](images/demo.mp4)
+[Watch demo video](media/gas-detector.PNG)
 
 ## Project Overview
 
